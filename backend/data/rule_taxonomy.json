@@ -1,0 +1,15 @@
+[
+  {"param_id": "kyc_risk_weight", "name": "Customer KYC Risk Weighting Formula", "layer": "onboarding"},
+  {"param_id": "kyc_review_frequency", "name": "Periodic KYC Review Frequency (per risk tier)", "layer": "onboarding"},
+  {"param_id": "aml_txn_threshold", "name": "AML Transaction Monitoring Alert Thresholds", "layer": "transaction_monitoring"},
+  {"param_id": "screening_frequency", "name": "Negative News / Watchlist Screening Frequency", "layer": "screening"},
+  {"param_id": "model_validation_cycle", "name": "Independent Model Validation Cycle", "layer": "governance"},
+  {"param_id": "model_documentation_standard", "name": "Model Documentation / Model Card Requirements", "layer": "governance"},
+  {"param_id": "human_oversight_checkpoint", "name": "Human-in-the-Loop Approval Checkpoints", "layer": "governance"},
+  {"param_id": "kill_switch_config", "name": "Model Kill-Switch / Suspension Configuration", "layer": "governance"},
+  {"param_id": "explainability_requirement", "name": "Decision Explainability Report Generation", "layer": "governance"},
+  {"param_id": "vendor_model_accountability", "name": "Third-Party/Vendor Model Accountability Tracking", "layer": "governance"},
+  {"param_id": "suspicious_activity_reporting_sla", "name": "Suspicious Activity Report (SAR) Filing SLA", "layer": "reporting"},
+  {"param_id": "document_validity_period", "name": "KYC Document Validity/Expiry Period", "layer": "onboarding"},
+  {"param_id": "model_risk_tiering", "name": "Model Risk Tier Classification Logic", "layer": "governance"}
+]
