@@ -14,6 +14,7 @@ import {
 import api from '../services/api';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import ErrorBanner from '../components/ErrorBanner';
 
 // Map taxonomy parameter IDs to readable names
 const TAXONOMY_MAP = {
@@ -40,6 +41,7 @@ export default function RuleImpact({
   const [loading, setLoading] = useState(false);
   const [runningMapping, setRunningMapping] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [suggestion, setSuggestion] = useState('');
   
   // Table search & sort states
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +70,7 @@ export default function RuleImpact({
       onMappingsUpdated && onMappingsUpdated(res.data || []);
     } else {
       setErrorMessage(res.error || 'Failed to load rule mappings.');
+      setSuggestion(res.suggestion || '');
       setMappings([]);
     }
     setLoading(false);
@@ -91,6 +94,7 @@ export default function RuleImpact({
       await loadMappings(activeDiffId);
     } else {
       setErrorMessage(res.error || 'Failed to execute rule impact mapping workflow.');
+      setSuggestion(res.suggestion || '');
     }
     setRunningMapping(false);
   };
@@ -250,6 +254,15 @@ export default function RuleImpact({
 
   return (
     <div className="space-y-6">
+      
+      {/* Error banner */}
+      {errorMessage && (
+        <ErrorBanner 
+          message={errorMessage} 
+          suggestion={suggestion} 
+          onRetry={mappings.length === 0 ? handleRunMapping : () => loadMappings(activeDiffId)} 
+        />
+      )}
       
       {/* Alert banner if no session selected */}
       {!activeDiffId && (

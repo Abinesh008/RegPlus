@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from pathlib import Path
@@ -402,3 +402,40 @@ def get_diff_mappings(diff_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("Error in GET /diff/{diff_id}/mappings: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
+
+@router.get("/diff/{diff_id}/export/pdf")
+def export_diff_pdf(diff_id: int, db: Session = Depends(get_db)):
+    """Generates and exports a professional compliance impact PDF advisory report."""
+    logger.info("PDF export requested for diff ID: %d", diff_id)
+    try:
+        from backend.app.services.pdf_generator import generate_compliance_pdf
+        pdf_content = generate_compliance_pdf(db, diff_id)
+        
+        # Set headers for downloading PDF
+        headers = {
+            "Content-Disposition": f"attachment; filename=RegPulse_Compliance_Report_{diff_id}.pdf"
+        }
+        return Response(content=pdf_content, media_type="application/pdf", headers=headers)
+    except ValueError as ve:
+        logger.error("Diff session not found: %s", str(ve))
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        logger.error("Error in GET /diff/{diff_id}/export/pdf: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+
+@router.get("/diff/{diff_id}/export/csv")
+def export_diff_csv(diff_id: int, db: Session = Depends(get_db)):
+    """Generates and exports a compliance impact CSV table."""
+    logger.info("CSV export requested for diff ID: %d", diff_id)
+    try:
+        from backend.app.services.csv_generator import generate_compliance_csv
+        csv_content = generate_compliance_csv(db, diff_id)
+        
+        # Set headers for downloading CSV
+        headers = {
+            "Content-Disposition": f"attachment; filename=RegPulse_Rule_Impact_Table_{diff_id}.csv"
+        }
+        return Response(content=csv_content, media_type="text/csv", headers=headers)
+    except Exception as e:
+        logger.error("Error in GET /diff/{diff_id}/export/csv: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to generate CSV: {str(e)}")

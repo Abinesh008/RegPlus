@@ -22,6 +22,7 @@ export default function CircularComparison({
   const [newCircularId, setNewCircularId] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [suggestion, setSuggestion] = useState('');
   
   // Results states
   const [diffSummary, setDiffSummary] = useState(null); // { diff_id, new, changed, unchanged }
@@ -34,6 +35,7 @@ export default function CircularComparison({
     const resDetails = await api.getDiffDetail(diffId);
     if (!resDetails.success) {
       setErrorMessage('Failed to fetch detailed difference categories.');
+      setSuggestion(resDetails.suggestion || '');
       return;
     }
     
@@ -82,6 +84,7 @@ export default function CircularComparison({
       onCompareSuccess && onCompareSuccess(res.data.diff_id, oldId, newId);
     } else {
       setErrorMessage(res.error || 'Comparison engine error.');
+      setSuggestion(res.suggestion || '');
     }
     setLoading(false);
   };
@@ -165,7 +168,7 @@ export default function CircularComparison({
       </div>
 
       {/* Error banner */}
-      {errorMessage && <ErrorBanner message={errorMessage} onRetry={handleCompare} />}
+      {errorMessage && <ErrorBanner message={errorMessage} suggestion={suggestion} onRetry={handleCompare} />}
 
       {/* Comparison outputs */}
       {loading && <LoadingSkeleton type="table" count={2} />}

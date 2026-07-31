@@ -13,11 +13,17 @@ const client = axios.create({
 const handleRequest = async (promise) => {
   try {
     const response = await promise;
-    return { data: response.data, error: null, success: true };
+    return { data: response.data, error: null, suggestion: null, success: true };
   } catch (error) {
     console.error("API Client Error:", error);
-    const message = error.response?.data?.detail || error.message || "Network Error";
-    return { data: null, error: message, success: false };
+    const responseData = error.response?.data;
+    const message = responseData?.detail || error.message || "Network Error";
+    const suggestion = responseData?.suggestion || (
+      error.code === 'ECONNABORTED' 
+        ? "The API request timed out. Gemini may be taking too long or your database may be locked. Please retry in a few seconds." 
+        : "Check that your backend server is running and your network is connected, then try again."
+    );
+    return { data: null, error: message, suggestion: suggestion, success: false };
   }
 };
 

@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { api } from './services/api';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import WorkflowTracker from './components/WorkflowTracker';
 
-// Import Pages
-import Dashboard from './pages/Dashboard';
-import CircularLibrary from './pages/CircularLibrary';
-import ObligationExtraction from './pages/ObligationExtraction';
-import CircularComparison from './pages/CircularComparison';
-import RuleImpact from './pages/RuleImpact';
-import ComplianceReport from './pages/ComplianceReport';
+// Lazy-loaded Pages for improved initial load performance
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CircularLibrary = lazy(() => import('./pages/CircularLibrary'));
+const ObligationExtraction = lazy(() => import('./pages/ObligationExtraction'));
+const CircularComparison = lazy(() => import('./pages/CircularComparison'));
+const RuleImpact = lazy(() => import('./pages/RuleImpact'));
+const ComplianceReport = lazy(() => import('./pages/ComplianceReport'));
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -197,62 +197,72 @@ export default function App() {
         {/* Main Content Pane */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
-            {currentPage === 'dashboard' && (
-              <Dashboard
-                circulars={circulars}
-                obligationsCount={circulars.length > 0 ? 12 : 0} // Inferred obligations count
-                diffCount={activeDiffId ? 1 : 0}
-                mappings={mappings}
-                backendStatus={backendStatus}
-                geminiStatus={geminiStatus}
-                lastProcessedTime={lastProcessedTime}
-                onNavigate={handleNavigate}
-              />
-            )}
-            
-            {currentPage === 'library' && (
-              <CircularLibrary
-                circulars={circulars}
-                loadingCirculars={loadingCirculars}
-                onRefreshLibrary={fetchCirculars}
-                onExtractSuccess={handleExtractSuccess}
-                onNavigate={handleNavigate}
-              />
-            )}
+            <Suspense fallback={
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-12 rounded-xl text-center text-xs text-[var(--text-muted)] font-medium">
+                <div className="animate-pulse flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                  <span>Loading workbench module...</span>
+                </div>
+              </div>
+            }>
+              {currentPage === 'dashboard' && (
+                <Dashboard
+                  circulars={circulars}
+                  obligationsCount={circulars.length > 0 ? 12 : 0} // Inferred obligations count
+                  diffCount={activeDiffId ? 1 : 0}
+                  mappings={mappings}
+                  backendStatus={backendStatus}
+                  geminiStatus={geminiStatus}
+                  lastProcessedTime={lastProcessedTime}
+                  onNavigate={handleNavigate}
+                />
+              )}
+              
+              {currentPage === 'library' && (
+                <CircularLibrary
+                  circulars={circulars}
+                  loadingCirculars={loadingCirculars}
+                  onRefreshLibrary={fetchCirculars}
+                  onExtractSuccess={handleExtractSuccess}
+                  onNavigate={handleNavigate}
+                />
+              )}
 
-            {currentPage === 'extraction' && (
-              <ObligationExtraction
-                circulars={circulars}
-                selectedCircularId={selectedCircularId}
-                onSelectCircular={setSelectedCircularId}
-                onExtractSuccess={handleExtractSuccess}
-              />
-            )}
+              {currentPage === 'extraction' && (
+                <ObligationExtraction
+                  circulars={circulars}
+                  selectedCircularId={selectedCircularId}
+                  onSelectCircular={setSelectedCircularId}
+                  onExtractSuccess={handleExtractSuccess}
+                />
+              )}
 
-            {currentPage === 'comparison' && (
-              <CircularComparison
-                circulars={circulars}
-                onCompareSuccess={handleCompareSuccess}
-                onNavigate={handleNavigate}
-              />
-            )}
+              {currentPage === 'comparison' && (
+                <CircularComparison
+                  circulars={circulars}
+                  onCompareSuccess={handleCompareSuccess}
+                  onNavigate={handleNavigate}
+                />
+              )}
 
-            {currentPage === 'rule-impact' && (
-              <RuleImpact
-                activeDiffId={activeDiffId}
-                onMappingsUpdated={handleMappingsUpdated}
-                onNavigate={handleNavigate}
-              />
-            )}
+              {currentPage === 'rule-impact' && (
+                <RuleImpact
+                  activeDiffId={activeDiffId}
+                  onMappingsUpdated={handleMappingsUpdated}
+                  onNavigate={handleNavigate}
+                />
+              )}
 
-            {currentPage === 'report' && (
-              <ComplianceReport
-                circulars={circulars}
-                oldCircularId={oldCircularId}
-                newCircularId={newCircularId}
-                mappings={mappings}
-              />
-            )}
+              {currentPage === 'report' && (
+                <ComplianceReport
+                  circulars={circulars}
+                  oldCircularId={oldCircularId}
+                  newCircularId={newCircularId}
+                  mappings={mappings}
+                  activeDiffId={activeDiffId}
+                />
+              )}
+            </Suspense>
           </div>
         </main>
       </div>

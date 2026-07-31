@@ -1,7 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.app.core.config import settings
 from backend.app.core.logging import setup_logging
@@ -76,6 +77,38 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    logger.error("HTTP exception occurred: %s (status=%d)", exc.detail, exc.status_code)
+    suggestion = "Verify your request payload or configuration parameters."
+    
+    exc_detail_lower = str(exc.detail).lower()
+    if "api key" in exc_detail_lower or "credentials" in exc_detail_lower:
+        suggestion = "Make sure your GEMINI_API_KEY environment variable is set correctly in your backend/.env file."
+    elif "timeout" in exc_detail_lower or "limit" in exc_detail_lower or "quota" in exc_detail_lower or "exhausted" in exc_detail_lower:
+        suggestion = "The Gemini API request timed out or exceeded quota limits. Please retry in a few moments."
+    elif "database" in exc_detail_lower or "db" in exc_detail_lower or "locked" in exc_detail_lower:
+        suggestion = "The database appears to be locked or busy. Please retry the request."
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "suggestion": suggestion
+        }
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Global unhandled exception: %s", str(exc), exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An unexpected error occurred while processing the request on the server.",
+            "suggestion": "Check the backend server logs for full stacktrace. Verify database connection and API keys."
+        }
+    )
 
 # Configure CORS for React frontend (localhost:5173)
 origins = [

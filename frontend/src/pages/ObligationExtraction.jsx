@@ -25,6 +25,7 @@ export default function ObligationExtraction({
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [suggestion, setSuggestion] = useState('');
   
   // Search & Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +50,7 @@ export default function ObligationExtraction({
       setObligations(res.data || []);
     } else {
       setErrorMessage(res.error || 'Failed to load obligations.');
+      setSuggestion(res.suggestion || '');
       setObligations([]);
     }
     setLoading(false);
@@ -73,6 +75,7 @@ export default function ObligationExtraction({
       onExtractSuccess && onExtractSuccess(selectedCircularId);
     } else {
       setErrorMessage(res.error || 'Extraction workflow failed.');
+      setSuggestion(res.suggestion || '');
     }
     setExtracting(false);
   };
@@ -153,7 +156,7 @@ export default function ObligationExtraction({
       </div>
 
       {/* Error banner */}
-      {errorMessage && <ErrorBanner message={errorMessage} onRetry={() => loadObligations(selectedCircularId)} />}
+      {errorMessage && <ErrorBanner message={errorMessage} suggestion={suggestion} onRetry={() => loadObligations(selectedCircularId)} />}
 
       {/* Main Grid: Filters & Listing */}
       {loading ? (

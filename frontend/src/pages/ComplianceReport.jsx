@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiPrinter, FiFileText, FiInfo, FiActivity, FiCheckSquare, FiAlertCircle } from 'react-icons/fi';
+import { FiPrinter, FiFileText, FiInfo, FiActivity, FiCheckSquare, FiAlertCircle, FiDownload } from 'react-icons/fi';
 import EmptyState from '../components/EmptyState';
 
 // Map parameter IDs to readable labels
@@ -23,7 +23,8 @@ export default function ComplianceReport({
   circulars = [],
   oldCircularId,
   newCircularId,
-  mappings = []
+  mappings = [],
+  activeDiffId
 }) {
 
   const oldCircular = circulars.find(c => c.id === Number(oldCircularId));
@@ -74,18 +75,36 @@ export default function ComplianceReport({
       
       {/* Report Controls */}
       {hasData && (
-        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-sm flex justify-between items-center no-print">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-center no-print">
           <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-medium">
             <FiInfo className="text-primary w-4.5 h-4.5" />
-            Use your browser print utility to export this layout as a PDF.
+            Download formal PDF, export tabular CSV rules, or print current layout.
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] border border-[var(--border-color)] hover:bg-[var(--border-color)] text-[var(--text-color)] text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-sm"
             >
-              <FiPrinter /> Print / Export PDF
+              <FiPrinter /> Print View
             </button>
+            <a
+              href={`http://localhost:8000/diff/${activeDiffId}/export/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-sm text-center select-none"
+              style={{ textDecoration: 'none' }}
+            >
+              <FiDownload /> Download PDF
+            </a>
+            <a
+              href={`http://localhost:8000/diff/${activeDiffId}/export/csv`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-650 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-sm text-center select-none"
+              style={{ textDecoration: 'none' }}
+            >
+              <FiDownload /> Export CSV
+            </a>
           </div>
         </div>
       )}
