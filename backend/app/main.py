@@ -38,6 +38,11 @@ async def lifespan(app: FastAPI):
                 columns = [col["name"] for col in inspector.get_columns("obligations")]
                 if "confidence_score" not in columns:
                     recreate_needed = True
+            
+            if "diff_results" in inspector.get_table_names():
+                columns = [col["name"] for col in inspector.get_columns("diff_results")]
+                if "semantic_verified" not in columns or "diff_session_id" not in columns or "match_reason" not in columns:
+                    recreate_needed = True
                     
             if recreate_needed:
                 logger.warning("Outdated database schema detected (missing column). Recreating database...")

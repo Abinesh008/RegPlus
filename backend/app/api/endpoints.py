@@ -6,8 +6,16 @@ from sqlalchemy import select
 from pathlib import Path
 
 from backend.app.db.session import get_db
-from backend.app.models.models import Circular, Obligation
-from backend.app.schemas.schemas import CircularMetadataResponse, CircularResponse, ObligationResponse
+from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult
+from backend.app.schemas.schemas import (
+    CircularMetadataResponse,
+    CircularResponse,
+    ObligationResponse,
+    DiffRequest,
+    DiffSummaryResponse,
+    DiffDetailResponse,
+    DiffResultResponse
+)
 from backend.app.services.pdf_extractor import (
     compute_sha256,
     get_or_extract_text,
@@ -275,3 +283,46 @@ def get_circular_obligations(id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("Unexpected error retrieving obligations: %s", e)
         raise HTTPException(status_code=500, detail="Database query error")
+
+@router.post("/diff", response_model=DiffSummaryResponse)
+def compute_diff(request: DiffRequest, db: Session = Depends(get_db)):
+    """Compare two RBI circulars using their obligations."""
+    logger.info("Diff API requested: old_circular_id=%d, new_circular_id=%d", request.old_circular_id, request.new_circular_id)
+    try:
+        from backend.app.services.diff_engine import diff_circulars
+        result = diff_circulars(db, request.old_circular_id, request.new_circular_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in POST /diff: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Diff engine failed: {str(e)}")
+
+@router.get("/diff/{diff_id}", response_model=DiffDetailResponse)
+def get_diff_detail(diff_id: int, db: Session = Depends(get_db)):
+    """Retrieve diff results grouped by category."""
+    logger.info("Diff detail requested for session ID: %d", diff_id)
+    try:
+        # Check if DiffSession exists
+        stmt_session = select(DiffSession).where(DiffSession.id == diff_id)
+        session_record = db.execute(stmt_session).scalar_one_or_none()
+        if not session_record:
+            logger.error("DiffSession with ID %d not found.", diff_id)
+            raise HTTPException(status_code=404, detail="DiffSession not found")
+            
+        stmt_results = select(DiffResult).where(DiffResult.diff_session_id == diff_id)
+        results = db.execute(stmt_results).scalars().all()
+        
+        # Group by category (NEW, CHANGED, UNCHANGED)
+        # Note: categories are stored as lowercase "new", "changed", "unchanged" in DB
+        grouped = {
+            "NEW": [r for r in results if r.category == "new"],
+            "CHANGED": [r for r in results if r.category == "changed"],
+            "UNCHANGED": [r for r in results if r.category == "unchanged"]
+        }
+        return grouped
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in GET /diff/{diff_id}: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")

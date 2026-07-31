@@ -54,12 +54,31 @@ class DiffResultBase(BaseModel):
 
 class DiffResultResponse(DiffResultBase):
     id: int
+    diff_session_id: int
     old_circular_id: Optional[int] = None
     new_circular_id: int
     old_obligation_id: Optional[int] = None
     new_obligation_id: int
+    semantic_verified: bool
+    similarity_score: float
+    match_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class DiffRequest(BaseModel):
+    old_circular_id: int
+    new_circular_id: int
+
+class DiffSummaryResponse(BaseModel):
+    diff_id: int
+    new: int
+    changed: int
+    unchanged: int
+
+class DiffDetailResponse(BaseModel):
+    NEW: List[DiffResultResponse]
+    CHANGED: List[DiffResultResponse]
+    UNCHANGED: List[DiffResultResponse]
 
 # RuleMapping Schemas
 class RuleMappingBase(BaseModel):
