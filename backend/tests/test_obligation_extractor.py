@@ -40,6 +40,17 @@ def setup_database():
     yield
     Base.metadata.drop_all(bind=engine)
 
+@pytest.fixture(autouse=True)
+def setup_dependency_override():
+    """Ensure the local dependency override is active for client requests."""
+    old_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    if old_override is not None:
+        app.dependency_overrides[get_db] = old_override
+    else:
+        app.dependency_overrides.pop(get_db, None)
+
 @pytest.fixture
 def sample_circular():
     """Insert a sample circular into the test database."""

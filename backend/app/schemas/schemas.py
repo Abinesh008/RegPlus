@@ -91,3 +91,23 @@ class RuleMappingResponse(RuleMappingBase):
     matched_param_ids: List[str]
 
     model_config = ConfigDict(from_attributes=True)
+
+class MappingSummaryResponse(BaseModel):
+    mapped: int
+    cached: int
+    generated: int
+    invalid_parameters_removed: int
+
+class MappingDetailResponse(BaseModel):
+    obligation: str
+    matched_parameters: List[str]
+    confidence: str
+    priority: str
+    reasoning: str
+    affected_business_layer: List[str]
+    mapping_source: str
+    review_required: bool
+    match_score: float
+    mapping_version: str
+
+    model_config = ConfigDict(from_attributes=True)

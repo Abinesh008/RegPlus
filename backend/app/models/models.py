@@ -93,6 +93,14 @@ class RuleMapping(Base):
     matched_param_ids: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-serialized list of parameter IDs
     reasoning: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[str] = mapped_column(String(20), nullable=False)  # "high", "medium", "low"
+    implementation_priority: Mapped[str] = mapped_column(String(20), nullable=False)  # "critical", "high", "medium", "low"
+    mapping_model: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "gemini-2.5-flash", "mock"
+    mapping_timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    affected_business_layer: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-serialized list of layers
+    mapping_source: Mapped[str] = mapped_column(String(20), nullable=False)  # "gemini", "database_cache", "mock"
+    review_required: Mapped[bool] = mapped_column(nullable=False, default=False)
+    match_score: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    mapping_version: Mapped[str] = mapped_column(String(10), default="v1.0", nullable=False)
 
     # Relationships
     obligation: Mapped["Obligation"] = relationship("Obligation", back_populates="rule_mappings")

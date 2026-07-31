@@ -6,7 +6,7 @@ from sqlalchemy import select
 from pathlib import Path
 
 from backend.app.db.session import get_db
-from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult
+from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult, RuleMapping
 from backend.app.schemas.schemas import (
     CircularMetadataResponse,
     CircularResponse,
@@ -14,7 +14,9 @@ from backend.app.schemas.schemas import (
     DiffRequest,
     DiffSummaryResponse,
     DiffDetailResponse,
-    DiffResultResponse
+    DiffResultResponse,
+    MappingSummaryResponse,
+    MappingDetailResponse
 )
 from backend.app.services.pdf_extractor import (
     compute_sha256,
@@ -325,4 +327,78 @@ def get_diff_detail(diff_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error("Error in GET /diff/{diff_id}: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
+
+@router.post("/diff/{diff_id}/map", response_model=MappingSummaryResponse)
+def map_diff_rules(diff_id: int, db: Session = Depends(get_db)):
+    """Run rule mapping engine for new and changed obligations in a diff session."""
+    logger.info("Rule mapping POST requested for session ID: %d", diff_id)
+    try:
+        from backend.app.services.rule_mapper import run_mapping_workflow
+        summary = run_mapping_workflow(db, diff_id)
+        return summary
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in POST /diff/{diff_id}/map: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Rule mapping failed: {str(e)}")
+
+@router.get("/diff/{diff_id}/mappings", response_model=List[MappingDetailResponse])
+def get_diff_mappings(diff_id: int, db: Session = Depends(get_db)):
+    """Retrieve rule mappings for new and changed obligations in a diff session."""
+    logger.info("Rule mappings GET requested for session ID: %d", diff_id)
+    try:
+        import json
+        # Check if DiffSession exists
+        stmt_session = select(DiffSession).where(DiffSession.id == diff_id)
+        session_record = db.execute(stmt_session).scalar_one_or_none()
+        if not session_record:
+            logger.error("DiffSession with ID %d not found.", diff_id)
+            raise HTTPException(status_code=404, detail="DiffSession not found")
+            
+        # Find all NEW and CHANGED diff results
+        stmt_results = select(DiffResult).where(
+            DiffResult.diff_session_id == diff_id,
+            DiffResult.category.in_(["new", "changed"])
+        )
+        diff_results = db.execute(stmt_results).scalars().all()
+        
+        response_data = []
+        for r in diff_results:
+            if not r.new_obligation:
+                continue
+                
+            # Fetch stored mapping for this new_obligation
+            stmt_mapping = select(RuleMapping).where(RuleMapping.obligation_id == r.new_obligation_id)
+            mapping = db.execute(stmt_mapping).scalar_one_or_none()
+            
+            if mapping:
+                try:
+                    matched_params = json.loads(mapping.matched_param_ids)
+                except Exception:
+                    matched_params = [mapping.matched_param_ids]
+                    
+                try:
+                    business_layers = json.loads(mapping.affected_business_layer)
+                except Exception:
+                    business_layers = []
+                    
+                response_data.append({
+                    "obligation": r.new_obligation.obligation_text,
+                    "matched_parameters": matched_params,
+                    "confidence": mapping.confidence,
+                    "priority": mapping.implementation_priority,
+                    "reasoning": mapping.reasoning,
+                    "affected_business_layer": business_layers,
+                    "mapping_source": mapping.mapping_source,
+                    "review_required": mapping.review_required,
+                    "match_score": mapping.match_score,
+                    "mapping_version": mapping.mapping_version
+                })
+                
+        return response_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in GET /diff/{diff_id}/mappings: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
