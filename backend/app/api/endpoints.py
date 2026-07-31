@@ -6,8 +6,8 @@ from sqlalchemy import select
 from pathlib import Path
 
 from backend.app.db.session import get_db
-from backend.app.models.models import Circular
-from backend.app.schemas.schemas import CircularMetadataResponse, CircularResponse
+from backend.app.models.models import Circular, Obligation
+from backend.app.schemas.schemas import CircularMetadataResponse, CircularResponse, ObligationResponse
 from backend.app.services.pdf_extractor import (
     compute_sha256,
     get_or_extract_text,
@@ -234,3 +234,44 @@ def process_samples(db: Session = Depends(get_db)):
             
     logger.info("Sample processing completed")
     return {"processed": len(pdf_files), "details": results}
+
+@router.post("/circulars/{id}/extract", response_model=List[ObligationResponse])
+def extract_circular_obligations(id: int, db: Session = Depends(get_db)):
+    """Extract compliance obligations from a circular (utilizes Gemini/Mock Mode)."""
+    logger.info("Extraction requested for circular ID: %d", id)
+    try:
+        stmt = select(Circular).where(Circular.id == id)
+        circular = db.execute(stmt).scalar_one_or_none()
+        if not circular:
+            logger.error("Circular with ID %d not found for extraction.", id)
+            raise HTTPException(status_code=404, detail="Circular not found")
+        
+        from backend.app.services.obligation_extractor import run_extraction_workflow
+        obligations = run_extraction_workflow(circular, db)
+        return obligations
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error during obligation extraction: %s", e)
+        raise HTTPException(status_code=500, detail=f"Internal extraction error: {str(e)}")
+
+@router.get("/circulars/{id}/obligations", response_model=List[ObligationResponse])
+def get_circular_obligations(id: int, db: Session = Depends(get_db)):
+    """Retrieve stored compliance obligations for a specific circular by ID (never calls Gemini)."""
+    logger.info("Fetching obligations for circular ID: %d", id)
+    try:
+        # Check if circular exists first to return 404 if missing
+        stmt_circ = select(Circular).where(Circular.id == id)
+        circular = db.execute(stmt_circ).scalar_one_or_none()
+        if not circular:
+            logger.error("Circular with ID %d not found.", id)
+            raise HTTPException(status_code=404, detail="Circular not found")
+            
+        stmt = select(Obligation).where(Obligation.circular_id == id)
+        obligations = db.execute(stmt).scalars().all()
+        return obligations
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error retrieving obligations: %s", e)
+        raise HTTPException(status_code=500, detail="Database query error")

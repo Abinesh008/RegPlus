@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import ForeignKey, String, Text, DateTime
+from sqlalchemy import ForeignKey, String, Text, DateTime, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.session import Base
 
@@ -33,6 +33,7 @@ class Obligation(Base):
     source_clause: Mapped[str] = mapped_column(String(100), nullable=False)
     obligation_type: Mapped[str] = mapped_column(String(50), nullable=False)
     applies_to: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
 
     # Relationships
     circular: Mapped["Circular"] = relationship("Circular", back_populates="obligations")

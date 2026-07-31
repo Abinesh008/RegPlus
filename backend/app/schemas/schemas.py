@@ -37,6 +37,7 @@ class ObligationBase(BaseModel):
     source_clause: str
     obligation_type: str
     applies_to: str
+    confidence_score: float
 
 class ObligationCreate(ObligationBase):
     pass
