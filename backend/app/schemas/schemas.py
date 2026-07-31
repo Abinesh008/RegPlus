@@ -5,9 +5,10 @@ from pydantic import BaseModel, ConfigDict
 # Circular Schemas
 class CircularBase(BaseModel):
     title: str
-    version_date: str
+    version_date: Optional[str] = None
     source_filename: str
     raw_text: str
+    pdf_hash: Optional[str] = None
 
 class CircularCreate(CircularBase):
     pass
@@ -17,6 +18,17 @@ class CircularResponse(CircularBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class CircularMetadataResponse(BaseModel):
+    id: int
+    title: str
+    version_date: Optional[str] = None
+    source_filename: str
+    pdf_hash: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 # Obligation Schemas
 class ObligationBase(BaseModel):

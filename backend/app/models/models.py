@@ -10,10 +10,12 @@ class Circular(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    version_date: Mapped[str] = mapped_column(String(50), nullable=False)
+    version_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     source_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    pdf_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
 
     # Relationships
     obligations: Mapped[List["Obligation"]] = relationship(

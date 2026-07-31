@@ -17,6 +17,33 @@ async def lifespan(app: FastAPI):
     """Lifecycle events for DB auto-initialization."""
     logger.info("Initializing database tables on startup...")
     try:
+        from sqlalchemy import inspect
+        from pathlib import Path
+        
+        # Check if schema is outdated and recreate if necessary
+        db_url = settings.DATABASE_URL
+        if db_url.startswith("sqlite:///"):
+            db_path_str = db_url.replace("sqlite:///", "")
+            db_file = Path(db_path_str)
+            
+            inspector = inspect(engine)
+            if "circulars" in inspector.get_table_names():
+                columns = [col["name"] for col in inspector.get_columns("circulars")]
+                if "pdf_hash" not in columns:
+                    logger.warning("Outdated database schema detected (missing 'pdf_hash'). Recreating database...")
+                    try:
+                        Base.metadata.drop_all(bind=engine)
+                        logger.info("Outdated database tables dropped successfully.")
+                    except Exception as drop_err:
+                        logger.error("Failed to drop tables: %s. Deleting database file.", drop_err)
+                        engine.dispose()
+                        if db_file.exists():
+                            try:
+                                db_file.unlink()
+                                logger.info("Outdated database file deleted successfully.")
+                            except Exception as unlink_err:
+                                logger.error("Failed to delete database file: %s", unlink_err)
+                                
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized successfully.")
     except Exception as e:
