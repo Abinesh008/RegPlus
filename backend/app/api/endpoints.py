@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from pathlib import Path
 
+from backend.app.core.config import settings
 from backend.app.db.session import get_db
 from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult, RuleMapping
 from backend.app.schemas.schemas import (
@@ -32,9 +33,31 @@ logger = logging.getLogger("regpulse.api")
 
 @router.get("/health")
 def health_check():
-    """Health check endpoint to verify backend status."""
+    """Health check endpoint to verify backend status and Gemini integration."""
     logger.debug("Health check requested")
-    return {"status": "OK"}
+    
+    api_key = settings.GEMINI_API_KEY
+    gemini_configured = False
+    
+    # 1. Filter out known mock/placeholder keys
+    if not api_key or api_key in ("mock_api_key", "your_gemini_api_key_here"):
+        logger.debug("Gemini key is mock or empty. Using Mock Mode.")
+    else:
+        # 2. Attempt client initialization
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            gemini_configured = True
+            logger.debug("Gemini Client initialized successfully. Active mode enabled.")
+        except Exception as err:
+            logger.warning("Failed to initialize Gemini Client: %s", err)
+            gemini_configured = False
+
+    return {
+        "status": "OK",
+        "gemini_configured": gemini_configured,
+        "model_name": settings.MODEL_NAME
+    }
 
 @router.get("/circulars", response_model=List[CircularMetadataResponse])
 def list_circulars(db: Session = Depends(get_db)):

@@ -66,6 +66,11 @@ class ObligationItem(BaseModel):
     ]
     confidence_score: float = Field(..., ge=0.0, le=1.0)
 
+class ObligationListWrapper(BaseModel):
+    obligations: List[ObligationItem] = Field(
+        description="List of compliance obligations extracted from the circular text"
+    )
+
 def extract_obligations_mock(circular_text: str, circular_id: int) -> List[ObligationItem]:
     """Generates a deterministic set of mock obligations for a circular."""
     logger.info("Mock Mode: Generating deterministic obligations for circular ID %d", circular_id)
@@ -98,8 +103,13 @@ def parse_and_validate_json(json_str: str) -> List[ObligationItem]:
         cleaned = cleaned[:-3]
     cleaned = cleaned.strip()
     
-    # Use TypeAdapter to validate list of items
-    return TypeAdapter(List[ObligationItem]).validate_json(cleaned)
+    # Try parsing as ObligationListWrapper first, fallback to List[ObligationItem] directly if wrapper fails
+    try:
+        wrapper = ObligationListWrapper.model_validate_json(cleaned)
+        return wrapper.obligations
+    except Exception as wrapper_err:
+        logger.debug("Failed to parse as ObligationListWrapper: %s. Attempting fallback parse of direct list.", wrapper_err)
+        return TypeAdapter(List[ObligationItem]).validate_json(cleaned)
 
 def run_extraction_workflow(circular: Circular, db: Session) -> List[Obligation]:
     """Core workflow to extract compliance obligations from a circular.
@@ -158,7 +168,7 @@ def run_extraction_workflow(circular: Circular, db: Session) -> List[Obligation]
                 config = types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
                     response_mime_type="application/json",
-                    response_schema=List[ObligationItem]
+                    response_schema=ObligationListWrapper
                 )
             except Exception as config_err:
                 logger.warning("Could not set response_schema config: %s. Falling back to JSON mime type only.", config_err)

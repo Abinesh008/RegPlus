@@ -37,8 +37,10 @@ export default function App() {
     const res = await api.healthCheck();
     if (res.success && res.data?.status === 'OK') {
       setBackendStatus('connected');
+      setGeminiStatus(res.data.gemini_configured ? 'connected' : 'mock');
     } else {
       setBackendStatus('error');
+      setGeminiStatus('mock');
     }
   };
 
@@ -74,13 +76,6 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Determine Gemini active status from mappings source
-  useEffect(() => {
-    if (mappings.length > 0) {
-      const hasGemini = mappings.some(m => m.mapping_source?.toLowerCase() === 'gemini');
-      setGeminiStatus(hasGemini ? 'connected' : 'mock');
-    }
-  }, [mappings]);
 
   // Update last processed timestamp
   const updateProcessingTime = () => {
