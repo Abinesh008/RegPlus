@@ -116,7 +116,7 @@ export default function App() {
     if (user) {
       checkHealth();
       fetchCirculars();
-      const interval = setInterval(checkHealth, 15000);
+      const interval = setInterval(checkHealth, 60000);
       return () => clearInterval(interval);
     }
   }, [user]);
