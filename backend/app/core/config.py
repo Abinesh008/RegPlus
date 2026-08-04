@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite:///./regpulse.db")
     LOG_LEVEL: str = Field(default="INFO")
 
+    # JWT Credentials & Expirations (mapped to env variables)
+    JWT_SECRET_KEY: str = Field(default="supersecretaccesskeyforregpulse")
+    JWT_REFRESH_SECRET_KEY: str = Field(default="supersecretrefreshkeyforregpulse")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
+
     
     # Configure Pydantic to read from a .env file located at backend/
     model_config = SettingsConfigDict(

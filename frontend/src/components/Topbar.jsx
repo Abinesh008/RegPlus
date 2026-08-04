@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
 import { 
   Sun, 
   Moon, 
@@ -38,11 +39,13 @@ export default function Topbar({
 
   // Current Page
   currentPage = 'dashboard',
+  onNavigate,
 
   // AI Insights Panel
   onToggleAIInsights = () => {},
   isAIInsightsOpen = false
 }) {
+  const { user, logout } = useAuth();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const notifRef = useRef(null);
@@ -64,7 +67,6 @@ export default function Topbar({
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
-  // Format page names for breadcrumbs
   const getBreadcrumbs = () => {
     const segments = ['RegPulse'];
     if (currentPage === 'dashboard') {
@@ -79,8 +81,22 @@ export default function Topbar({
       segments.push('Rule Impact');
     } else if (currentPage === 'report') {
       segments.push('Compliance Report');
+    } else if (currentPage === 'user-management') {
+      segments.push('User Management');
+    } else if (currentPage === 'profile') {
+      segments.push('User Profile');
     }
     return segments;
+  };
+
+  // Get initials for profile badge
+  const getInitials = () => {
+    if (!user?.name) return 'U';
+    const parts = user.name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
   };
 
   return (
@@ -125,7 +141,6 @@ export default function Topbar({
 
         {/* Backend & Gemini status indicators */}
         <div className="hidden sm:flex items-center gap-3.5 border-r border-[var(--border-color)] pr-4.5">
-          {/* Backend Api connection status */}
           <div 
             className="flex items-center gap-1.5 text-xs font-semibold"
             title="FastAPI Server Diagnostics"
@@ -148,7 +163,6 @@ export default function Topbar({
             )}
           </div>
 
-          {/* Gemini connection status */}
           <div 
             className="flex items-center gap-1.5 text-xs font-semibold"
             title={geminiStatus === 'connected' ? "Connected to Google Gemini API" : "Gemini Mock Offline Mode Active"}
@@ -166,7 +180,6 @@ export default function Topbar({
             )}
           </div>
 
-          {/* Diagnostic manual reload */}
           <button
             onClick={onRefreshHealth}
             className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1.5 hover:bg-[var(--bg-app)] rounded-lg transition-colors cursor-pointer"
@@ -189,7 +202,6 @@ export default function Topbar({
             )}
           </button>
 
-          {/* Notification dropdown box */}
           <NotificationCenter
             isOpen={isNotifOpen}
             onClose={() => setIsNotifOpen(false)}
@@ -215,7 +227,7 @@ export default function Topbar({
         </button>
 
         {/* Toggle AI Insights Panel */}
-        {currentPage !== 'dashboard' && currentPage !== 'settings' && currentPage !== 'help' && currentPage !== 'about' && (
+        {currentPage !== 'dashboard' && currentPage !== 'settings' && currentPage !== 'help' && currentPage !== 'about' && currentPage !== 'user-management' && currentPage !== 'profile' && (
           <button
             onClick={onToggleAIInsights}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
@@ -236,27 +248,32 @@ export default function Topbar({
             className="flex items-center gap-2 hover:opacity-85 transition-opacity cursor-pointer text-left"
           >
             <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-sm ring-1 ring-[var(--border-color)]">
-              AN
+              {getInitials()}
             </div>
             <div className="hidden md:block">
-              <span className="block text-[11px] font-bold text-[var(--text-main)] leading-none">Aditya Nair</span>
-              <span className="block text-[9px] text-[var(--text-muted)] mt-0.5 font-medium leading-none">Risk Manager</span>
+              <span className="block text-[11px] font-bold text-[var(--text-main)] leading-none truncate max-w-[90px]">{user?.name || 'User'}</span>
+              <span className="block text-[9px] text-[var(--text-muted)] mt-0.5 font-medium leading-none">{user?.role || 'Guest'}</span>
             </div>
             <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
           </button>
 
-          {/* Profile Popover details */}
           {isProfileOpen && (
             <div className="absolute right-0 mt-2 w-52 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-lg z-50 overflow-hidden text-xs py-1.5 text-[var(--text-main)] font-medium">
               <div className="px-3.5 py-2 border-b border-[var(--border-color)] bg-[var(--bg-app)]/35">
-                <span className="block font-bold truncate">Aditya Nair</span>
-                <span className="block text-[10px] text-[var(--text-muted)] truncate">aditya.nair@jocata.com</span>
+                <span className="block font-bold truncate">{user?.name}</span>
+                <span className="block text-[10px] text-[var(--text-muted)] truncate">{user?.email}</span>
               </div>
               <div className="py-1">
-                <button className="w-full text-left px-3.5 py-1.5 hover:bg-[var(--bg-app)] cursor-pointer">
-                  Settings Profiles
+                <button 
+                  onClick={() => { setIsProfileOpen(false); onNavigate && onNavigate('profile'); }}
+                  className="w-full text-left px-3.5 py-1.5 hover:bg-[var(--bg-app)] cursor-pointer"
+                >
+                  Workstation Profile
                 </button>
-                <button className="w-full text-left px-3.5 py-1.5 hover:bg-[var(--bg-app)] cursor-pointer text-[var(--color-danger)] font-semibold">
+                <button 
+                  onClick={() => { setIsProfileOpen(false); logout(); }}
+                  className="w-full text-left px-3.5 py-1.5 hover:bg-[var(--bg-app)] cursor-pointer text-[var(--color-danger)] font-semibold"
+                >
                   Sign Out Session
                 </button>
               </div>

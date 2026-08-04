@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
 import { 
   LayoutDashboard, 
   Files, 
@@ -12,17 +13,9 @@ import {
   Info,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Users
 } from 'lucide-react';
-
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'library', label: 'Circular Library', icon: Files },
-  { id: 'extraction', label: 'Obligation Extraction', icon: Eye },
-  { id: 'comparison', label: 'Circular Comparison', icon: GitCompare },
-  { id: 'rule-impact', label: 'Rule Impact', icon: Activity },
-  { id: 'report', label: 'Compliance Report', icon: FileText },
-];
 
 const bottomItems = [
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -36,6 +29,31 @@ export default function Sidebar({
   isCollapsed, 
   onToggleCollapse 
 }) {
+  const { user } = useAuth();
+
+  const filteredNavItems = React.useMemo(() => {
+    let items = [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'library', label: 'Circular Library', icon: Files },
+      { id: 'extraction', label: 'Obligation Extraction', icon: Eye },
+      { id: 'comparison', label: 'Circular Comparison', icon: GitCompare },
+      { id: 'rule-impact', label: 'Rule Impact', icon: Activity },
+      { id: 'report', label: 'Compliance Report', icon: FileText },
+    ];
+
+    if (user?.role === 'Auditor') {
+      items = items.filter(item => 
+        item.id === 'dashboard' || item.id === 'library' || item.id === 'report'
+      );
+    }
+
+    if (user?.role === 'Super Admin') {
+      items.push({ id: 'user-management', label: 'User Management', icon: Users });
+    }
+
+    return items;
+  }, [user]);
+
   return (
     <motion.aside
       animate={{ width: isCollapsed ? 68 : 240 }}
@@ -63,7 +81,7 @@ export default function Sidebar({
 
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
           

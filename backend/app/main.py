@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 
 from backend.app.core.config import settings
 from backend.app.core.logging import setup_logging
@@ -15,7 +16,7 @@ logger = logging.getLogger("regpulse.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle events for DB auto-initialization."""
+    """Lifecycle events for DB auto-initialization and seeding."""
     logger.info("Initializing database tables on startup...")
     try:
         from sqlalchemy import inspect
@@ -66,7 +67,71 @@ async def lifespan(app: FastAPI):
                             logger.error("Failed to delete database file: %s", unlink_err)
                                 
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized successfully.")
+        logger.info("Database tables initialized successfully. Verifying test seeds...")
+        
+        # Seed default roles and testing users if empty
+        from sqlalchemy.orm import Session
+        from backend.app.models.models import Role, User
+        from backend.app.core.security import hash_password
+        
+        with Session(engine) as session:
+            stmt = select(Role)
+            existing_roles = session.execute(stmt).scalars().all()
+            if not existing_roles:
+                logger.info("Seeding system roles and permissions...")
+                role_admin = Role(name="Super Admin", description="User management and global settings")
+                role_manager = Role(name="Compliance Manager", description="Uploads circulars and triggers AI runs")
+                role_analyst = Role(name="Compliance Analyst", description="Audits obligations and rule mappings")
+                role_auditor = Role(name="Auditor", description="Read-only access to compliance reports")
+                
+                session.add_all([role_admin, role_manager, role_analyst, role_auditor])
+                session.commit()
+                
+                # Fetch fresh records to resolve IDs
+                role_admin = session.execute(select(Role).where(Role.name == "Super Admin")).scalar_one()
+                role_manager = session.execute(select(Role).where(Role.name == "Compliance Manager")).scalar_one()
+                role_analyst = session.execute(select(Role).where(Role.name == "Compliance Analyst")).scalar_one()
+                role_auditor = session.execute(select(Role).where(Role.name == "Auditor")).scalar_one()
+                
+                logger.info("Seeding default compliance testing users...")
+                u_admin = User(
+                    name="System Super Admin",
+                    email="admin@regpulse.ai",
+                    hashed_password=hash_password("Admin@12345"),
+                    role_id=role_admin.id,
+                    department="IT Governance",
+                    is_active=True
+                )
+                u_manager = User(
+                    name="Senior Compliance Manager",
+                    email="manager@regpulse.ai",
+                    hashed_password=hash_password("Manager@12345"),
+                    role_id=role_manager.id,
+                    department="Compliance Management",
+                    is_active=True
+                )
+                u_analyst = User(
+                    name="Compliance Operations Analyst",
+                    email="analyst@regpulse.ai",
+                    hashed_password=hash_password("Analyst@12345"),
+                    role_id=role_analyst.id,
+                    department="Internal Audit",
+                    is_active=True
+                )
+                u_auditor = User(
+                    name="Independent System Auditor",
+                    email="auditor@regpulse.ai",
+                    hashed_password=hash_password("Auditor@12345"),
+                    role_id=role_auditor.id,
+                    department="Regulatory Audit",
+                    is_active=True
+                )
+                session.add_all([u_admin, u_manager, u_analyst, u_auditor])
+                session.commit()
+                logger.info("Roles and testing seed users successfully populated.")
+            else:
+                logger.info("Test seeds already present in DB.")
+                
     except Exception as e:
         logger.error("Failed to initialize database tables: %s", e)
     yield
@@ -114,6 +179,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]
 
 app.add_middleware(
@@ -123,6 +190,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Custom HTTP Middleware for robust preflight OPTIONS handling
+@app.middleware("http")
+async def options_preflight_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        origin = request.headers.get("Origin")
+        if origin and ("localhost" in origin or "127.0.0.1" in origin):
+            response = Response("OK", status_code=200)
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            response.headers["Access-Control-Max-Age"] = "600"
+            return response
+    return await call_next(request)
 
 # Register endpoints
 app.include_router(api_router)

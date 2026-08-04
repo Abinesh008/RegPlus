@@ -4,11 +4,23 @@ const API_BASE = 'http://localhost:8000';
 
 const client = axios.create({
   baseURL: API_BASE,
-  timeout: 60000, // 60 seconds since Gemini API requests can take time
+  timeout: 60000, // 60 seconds
+  withCredentials: true, // Crucial for receiving and sending HttpOnly cookies
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+let accessToken = null;
+
+export const setAccessToken = (token) => {
+  accessToken = token;
+  if (token) {
+    client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete client.defaults.headers.common['Authorization'];
+  }
+};
 
 const handleRequest = async (promise) => {
   try {
@@ -56,23 +68,37 @@ export const api = {
   // 6. Process sample circulars
   processSamples: () => handleRequest(client.post('/circulars/process-samples')),
 
-  // 7. Extract obligations (invokes Gemini/Mock workflow)
+  // 7. Extract obligations
   extractObligations: (id) => handleRequest(client.post(`/circulars/${id}/extract`)),
 
-  // 8. Retrieve stored obligations (no Gemini call)
+  // 8. Retrieve stored obligations
   getCircularObligations: (id) => handleRequest(client.get(`/circulars/${id}/obligations`)),
 
-  // 9. Compare two circulars (diff engine)
+  // 9. Compare two circulars
   compareCirculars: (oldId, newId) => handleRequest(client.post('/diff', { old_circular_id: oldId, new_circular_id: newId })),
 
   // 10. Retrieve diff results
   getDiffDetail: (diffId) => handleRequest(client.get(`/diff/${diffId}`)),
 
-  // 11. Run rule mapping engine for a diff session
+  // 11. Run rule mapping engine
   runRuleMapping: (diffId) => handleRequest(client.post(`/diff/${diffId}/map`)),
 
-  // 12. Retrieve rule mappings for a diff session
+  // 12. Retrieve rule mappings
   getRuleMappings: (diffId) => handleRequest(client.get(`/diff/${diffId}/mappings`)),
+
+  // 13. Auth Endpoints
+  login: (email, password) => handleRequest(client.post('/auth/login', { email, password })),
+  logout: () => handleRequest(client.post('/auth/logout')),
+  refresh: () => handleRequest(client.post('/auth/refresh')),
+  changePassword: (old_password, new_password) => handleRequest(client.post('/auth/change-password', { old_password, new_password })),
+  forgotPassword: (email) => handleRequest(client.post('/auth/forgot-password', { email })),
+  getMe: () => handleRequest(client.get('/auth/me')),
+
+  // 14. User Management Endpoints
+  listUsers: (search, role) => handleRequest(client.get('/users', { params: { search, role } })),
+  createUser: (userData) => handleRequest(client.post('/users', userData)),
+  updateUser: (id, userData) => handleRequest(client.put(`/users/${id}`, userData)),
+  deleteUser: (id) => handleRequest(client.delete(`/users/${id}`))
 };
 
 export default api;

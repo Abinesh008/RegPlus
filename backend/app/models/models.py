@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import ForeignKey, String, Text, DateTime, Float, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Text, DateTime, Float, UniqueConstraint, Table, Column, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.session import Base
 
@@ -104,3 +104,64 @@ class RuleMapping(Base):
 
     # Relationships
     obligation: Mapped["Obligation"] = relationship("Obligation", back_populates="rule_mappings")
+
+
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+class Role(Base):
+    __tablename__ = "roles"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    permissions: Mapped[List["Permission"]] = relationship(
+        "Permission", secondary=role_permissions, back_populates="roles"
+    )
+    users: Mapped[List["User"]] = relationship("User", back_populates="role_rel")
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+
+    roles: Mapped[List["Role"]] = relationship(
+        "Role", secondary=role_permissions, back_populates="permissions"
+    )
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False)
+    department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    role_rel: Mapped["Role"] = relationship("Role", back_populates="users")
+    sessions: Mapped[List["Session"]] = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    user_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+class Session(Base):
+    __tablename__ = "sessions"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    refresh_token: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User", back_populates="sessions")
