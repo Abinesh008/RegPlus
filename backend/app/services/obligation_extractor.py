@@ -199,7 +199,8 @@ def run_extraction_workflow(circular: Circular, db: Session) -> List[Obligation]
             if parsed_items is None:
                 logger.info("Waiting 2 seconds before retry...")
                 time.sleep(2.0)
-                try:
+                try:git add .
+git commit -m "Fix Gemini integration and frontend status verification"
                     logger.info("Gemini request (Retry): Sending retry request to model %s", model_name)
                     # Use a fresh call or multi-turn history.
                     # As requested: retry prompt: "Return ONLY valid JSON. No explanation. No markdown."

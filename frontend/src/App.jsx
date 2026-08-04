@@ -1,8 +1,11 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './services/api';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import WorkflowTracker from './components/WorkflowTracker';
+import CommandPalette from './components/CommandPalette';
+import AIInsightsPanel from './components/AIInsightsPanel';
 
 // Lazy-loaded Pages for improved initial load performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -17,6 +20,15 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Shell UI States
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => 
+    localStorage.getItem('sidebar-collapsed') === 'true'
+  );
+  const [isAIInsightsOpen, setIsAIInsightsOpen] = useState(() => 
+    localStorage.getItem('ai-insights-open') !== 'false'
+  );
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   // Compliance Workspace States
   const [circulars, setCirculars] = useState([]);
   const [loadingCirculars, setLoadingCirculars] = useState(false);
@@ -28,8 +40,28 @@ export default function App() {
 
   // System Health States
   const [backendStatus, setBackendStatus] = useState('checking');
-  const [geminiStatus, setGeminiStatus] = useState('mock'); // 'connected' (active) or 'mock'
+  const [geminiStatus, setGeminiStatus] = useState('mock'); // 'connected' or 'mock'
   const [lastProcessedTime, setLastProcessedTime] = useState(() => localStorage.getItem('lastProcessedTime') || null);
+
+  // Mock Notifications State
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'upload', title: 'Upload Successful', message: 'KYC_Amendment_2020.pdf was uploaded.', time: '2 hours ago', read: true },
+    { id: 2, type: 'extraction', title: 'AI Extraction Completed', message: 'Gemini parsed 12 obligations with 95.4% confidence.', time: '1 hour ago', read: false },
+    { id: 3, type: 'mapping', title: 'Rule Mappings Generated', message: 'Parameters mapped to onboarding & transaction monitoring layers.', time: '30 mins ago', read: false }
+  ]);
+
+  // Add a new notification helper
+  const addNotification = (type, title, message) => {
+    const newNotif = {
+      id: Date.now(),
+      type,
+      title,
+      message,
+      time: 'Just now',
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
 
   // Initialize and check health
   const checkHealth = async () => {
@@ -37,8 +69,23 @@ export default function App() {
     const res = await api.healthCheck();
     if (res.success && res.data?.status === 'OK') {
       setBackendStatus('connected');
-      setGeminiStatus(res.data.gemini_configured ? 'connected' : 'mock');
+      const nextGemini = res.data.gemini_configured ? 'connected' : 'mock';
+      if (nextGemini !== geminiStatus) {
+        addNotification(
+          nextGemini === 'connected' ? 'extraction' : 'error',
+          nextGemini === 'connected' ? 'Gemini API Active' : 'Gemini Offline Mode',
+          nextGemini === 'connected' ? 'Successfully connected to Google Gemini cognitive services.' : 'Gemini API key missing. Operating in Mock mode.'
+        );
+      }
+      setGeminiStatus(nextGemini);
     } else {
+      if (backendStatus === 'connected') {
+        addNotification(
+          'error',
+          'Backend Disconnected',
+          'FastAPI database engine is offline. Running simulation in frontend fallback.'
+        );
+      }
       setBackendStatus('error');
       setGeminiStatus('mock');
     }
@@ -76,6 +123,27 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Sync sidebar collapse persistence
+  useEffect(() => {
+    localStorage.setItem('sidebar-collapsed', isSidebarCollapsed);
+  }, [isSidebarCollapsed]);
+
+  // Sync AI Insights persistence
+  useEffect(() => {
+    localStorage.setItem('ai-insights-open', isAIInsightsOpen);
+  }, [isAIInsightsOpen]);
+
+  // Keyboard shortcut listener for Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Update last processed timestamp
   const updateProcessingTime = () => {
@@ -86,6 +154,7 @@ export default function App() {
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    addNotification('info', 'Theme Updated', `Switched workspace display to ${theme === 'light' ? 'dark' : 'light'} visual layout.`);
   };
 
   // Detect Demo Mode
@@ -129,6 +198,7 @@ export default function App() {
   const handleExtractSuccess = (circId) => {
     setSelectedCircularId(circId);
     updateProcessingTime();
+    addNotification('extraction', 'Obligations Extracted', `Successfully compiled regulatory obligations for Circular ID #${circId}.`);
     setCurrentPage('extraction');
   };
 
@@ -137,17 +207,16 @@ export default function App() {
     setOldCircularId(oldId || '');
     setNewCircularId(newId);
     updateProcessingTime();
+    addNotification('mapping', 'Comparison Generated', `Circular comparison diff session #${diffId} successfully calculated.`);
     setCurrentPage('comparison');
   };
 
   const handleMappingsUpdated = (newMappings) => {
     setMappings(newMappings);
     updateProcessingTime();
+    addNotification('mapping', 'Rules Mapped', 'Successfully mapped circular obligations to internal banking rule engine taxonomy.');
   };
 
-  // Compute stats for metrics
-  const totalObligationsCount = circulars.length > 0 ? 9 : 0; // Simulated fallback if needed
-  
   // Title mapping helper
   const getPageTitle = () => {
     switch (currentPage) {
@@ -161,14 +230,34 @@ export default function App() {
     }
   };
 
-  return (
-    <div className="flex min-h-screen bg-[var(--bg-app)] text-[var(--text-main)] transition-colors duration-200">
-      {/* Left Sidebar */}
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+  // Notification actions
+  const handleMarkAsRead = (id) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
 
-      {/* Main Workspace Area */}
+  const handleClearAll = () => {
+    setNotifications([]);
+  };
+
+  const handleClearOne = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[var(--bg-app)] text-[var(--text-main)] transition-colors duration-200 overflow-hidden font-sans">
+      
+      {/* Collapsible Left Sidebar */}
+      <Sidebar 
+        currentPage={currentPage} 
+        onNavigate={handleNavigate} 
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+      />
+
+      {/* Main Workspace Frame container */}
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* Topbar */}
+        
+        {/* Topbar Header */}
         <Topbar
           theme={theme}
           toggleTheme={toggleTheme}
@@ -179,88 +268,170 @@ export default function App() {
           isDemoMode={isDemoMode}
           currentPageTitle={getPageTitle()}
           onRefreshHealth={() => { checkHealth(); fetchCirculars(); }}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          notifications={notifications}
+          onMarkNotificationAsRead={handleMarkAsRead}
+          onClearAllNotifications={handleClearAll}
+          onClearOneNotification={handleClearOne}
+          currentPage={currentPage}
+          isAIInsightsOpen={isAIInsightsOpen}
+          onToggleAIInsights={() => setIsAIInsightsOpen(prev => !prev)}
         />
 
         {/* Workflow Tracker Stepper (Visible on compliance related pages) */}
-        {currentPage !== 'dashboard' && (
+        {currentPage !== 'dashboard' && currentPage !== 'settings' && currentPage !== 'help' && currentPage !== 'about' && (
           <WorkflowTracker
             currentStep={pageToStep[currentPage] || 'upload'}
             onStepClick={handleStepClick}
           />
         )}
 
-        {/* Main Content Pane */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-6xl mx-auto">
-            <Suspense fallback={
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-12 rounded-xl text-center text-xs text-[var(--text-muted)] font-medium">
-                <div className="animate-pulse flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-                  <span>Loading workbench module...</span>
-                </div>
-              </div>
-            }>
-              {currentPage === 'dashboard' && (
-                <Dashboard
-                  circulars={circulars}
-                  obligationsCount={circulars.length > 0 ? 12 : 0} // Inferred obligations count
-                  diffCount={activeDiffId ? 1 : 0}
-                  mappings={mappings}
-                  backendStatus={backendStatus}
-                  geminiStatus={geminiStatus}
-                  lastProcessedTime={lastProcessedTime}
-                  onNavigate={handleNavigate}
-                />
-              )}
-              
-              {currentPage === 'library' && (
-                <CircularLibrary
-                  circulars={circulars}
-                  loadingCirculars={loadingCirculars}
-                  onRefreshLibrary={fetchCirculars}
-                  onExtractSuccess={handleExtractSuccess}
-                  onNavigate={handleNavigate}
-                />
-              )}
+        {/* Main Split Content Panel */}
+        <div className="flex-1 flex overflow-hidden">
+          
+          {/* Main Content Workspace Viewport */}
+          <main className="flex-1 overflow-y-auto p-6 relative">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="max-w-6xl mx-auto"
+              >
+                <Suspense fallback={
+                  <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-12 rounded-xl text-center text-xs text-[var(--text-muted)] font-medium">
+                    <div className="animate-pulse flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                      <span>Loading workbench module...</span>
+                    </div>
+                  </div>
+                }>
+                  {currentPage === 'dashboard' && (
+                    <Dashboard
+                      circulars={circulars}
+                      obligationsCount={circulars.length > 0 ? 12 : 0} 
+                      diffCount={activeDiffId ? 1 : 0}
+                      mappings={mappings}
+                      backendStatus={backendStatus}
+                      geminiStatus={geminiStatus}
+                      lastProcessedTime={lastProcessedTime}
+                      onNavigate={handleNavigate}
+                    />
+                  )}
+                  
+                  {currentPage === 'library' && (
+                    <CircularLibrary
+                      circulars={circulars}
+                      loadingCirculars={loadingCirculars}
+                      onRefreshLibrary={fetchCirculars}
+                      onExtractSuccess={handleExtractSuccess}
+                      onNavigate={handleNavigate}
+                    />
+                  )}
 
-              {currentPage === 'extraction' && (
-                <ObligationExtraction
-                  circulars={circulars}
-                  selectedCircularId={selectedCircularId}
-                  onSelectCircular={setSelectedCircularId}
-                  onExtractSuccess={handleExtractSuccess}
-                />
-              )}
+                  {currentPage === 'extraction' && (
+                    <ObligationExtraction
+                      circulars={circulars}
+                      selectedCircularId={selectedCircularId}
+                      onSelectCircular={setSelectedCircularId}
+                      onExtractSuccess={handleExtractSuccess}
+                    />
+                  )}
 
-              {currentPage === 'comparison' && (
-                <CircularComparison
-                  circulars={circulars}
-                  onCompareSuccess={handleCompareSuccess}
-                  onNavigate={handleNavigate}
-                />
-              )}
+                  {currentPage === 'comparison' && (
+                    <CircularComparison
+                      circulars={circulars}
+                      onCompareSuccess={handleCompareSuccess}
+                      onNavigate={handleNavigate}
+                    />
+                  )}
 
-              {currentPage === 'rule-impact' && (
-                <RuleImpact
-                  activeDiffId={activeDiffId}
-                  onMappingsUpdated={handleMappingsUpdated}
-                  onNavigate={handleNavigate}
-                />
-              )}
+                  {currentPage === 'rule-impact' && (
+                    <RuleImpact
+                      activeDiffId={activeDiffId}
+                      onMappingsUpdated={handleMappingsUpdated}
+                      onNavigate={handleNavigate}
+                    />
+                  )}
 
-              {currentPage === 'report' && (
-                <ComplianceReport
-                  circulars={circulars}
-                  oldCircularId={oldCircularId}
-                  newCircularId={newCircularId}
-                  mappings={mappings}
-                  activeDiffId={activeDiffId}
-                />
-              )}
-            </Suspense>
-          </div>
-        </main>
+                  {currentPage === 'report' && (
+                    <ComplianceReport
+                      circulars={circulars}
+                      oldCircularId={oldCircularId}
+                      newCircularId={newCircularId}
+                      mappings={mappings}
+                      activeDiffId={activeDiffId}
+                    />
+                  )}
+
+                  {/* Settings Page fallback stub */}
+                  {currentPage === 'settings' && (
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-xl">
+                      <h3 className="text-base font-bold mb-2">Platform Settings</h3>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                        Workspace settings configuration dashboard is locked under security policies. No edits are allowed in simulation mode.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Help Center Page fallback stub */}
+                  {currentPage === 'help' && (
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-xl">
+                      <h3 className="text-base font-bold mb-2">Help Center</h3>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                        Search knowledgebase or download user compliance guides for banking audits. Reference code: <b>RP-DOC-RBI-2026</b>.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* About Page fallback stub */}
+                  {currentPage === 'about' && (
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-8 rounded-xl">
+                      <h3 className="text-base font-bold mb-2">About RegPulse</h3>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-4">
+                        AI-powered automated RBI notification analysis, comparison diff engine, and Jocata screening rule parameters alignment.
+                      </p>
+                      <span className="text-[10px] bg-[var(--bg-app)] border border-[var(--border-color)] px-2 py-1 rounded font-mono">
+                        Build Hash: RP-99f38e-2026
+                      </span>
+                    </div>
+                  )}
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </main>
+
+          {/* Right-aligned Collapsible AI Insights Panel */}
+          <AnimatePresence>
+            {isAIInsightsOpen && (
+              <AIInsightsPanel
+                currentPage={currentPage}
+                isOpen={isAIInsightsOpen}
+                onClose={() => setIsAIInsightsOpen(false)}
+                circulars={circulars}
+                mappings={mappings}
+                activeDiffId={activeDiffId}
+                geminiStatus={geminiStatus}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+
       </div>
+
+      {/* Global Command Palette Overlay Dialog */}
+      <CommandPalette 
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onNavigate={handleNavigate}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onRefreshHealth={checkHealth}
+        circulars={circulars}
+        mappings={mappings}
+      />
     </div>
   );
 }

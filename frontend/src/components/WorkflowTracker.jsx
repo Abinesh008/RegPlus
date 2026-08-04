@@ -1,13 +1,20 @@
 import React from 'react';
-import { FiUpload, FiCpu, FiTrendingUp, FiFileText } from 'react-icons/fi';
-import { LuGitCompare } from 'react-icons/lu';
+import { motion } from 'framer-motion';
+import { 
+  UploadCloud, 
+  BrainCircuit, 
+  GitCompare, 
+  Sliders, 
+  FileCheck,
+  Check
+} from 'lucide-react';
 
 const steps = [
-  { id: 'upload', label: 'Upload Circular', icon: FiUpload },
-  { id: 'extract', label: 'Extract Obligations', icon: FiCpu },
-  { id: 'compare', label: 'Compare Circulars', icon: LuGitCompare },
-  { id: 'map', label: 'Map Rule Impact', icon: FiTrendingUp },
-  { id: 'report', label: 'Compliance Report', icon: FiFileText },
+  { id: 'upload', label: 'Ingest Circular', icon: UploadCloud },
+  { id: 'extract', label: 'Extract Obligations', icon: BrainCircuit },
+  { id: 'compare', label: 'Compare Versions', icon: GitCompare },
+  { id: 'map', label: 'Map Rule Impact', icon: Sliders },
+  { id: 'report', label: 'Advisory Report', icon: FileCheck },
 ];
 
 export default function WorkflowTracker({ currentStep, onStepClick }) {
@@ -15,15 +22,18 @@ export default function WorkflowTracker({ currentStep, onStepClick }) {
   const currentIndex = getStepIndex(currentStep);
 
   return (
-    <div className="w-full bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-4 no-print">
-      <div className="max-w-5xl mx-auto flex items-center justify-between relative">
-        {/* Background Line */}
-        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-200 dark:bg-slate-700 -translate-y-1/2 z-0" />
+    <div className="w-full bg-[var(--bg-card)] border-b border-[var(--border-color)] px-6 py-4.5 no-print select-none font-sans shrink-0">
+      <div className="max-w-4xl mx-auto flex items-center justify-between relative">
+        
+        {/* Background Track Line */}
+        <div className="absolute top-5 left-4 right-4 h-0.75 bg-slate-100 dark:bg-slate-800 rounded-full z-0" />
         
         {/* Active Progress Line */}
-        <div 
-          className="absolute top-1/2 left-0 h-0.5 bg-[var(--color-accent)] -translate-y-1/2 z-0 transition-all duration-300"
-          style={{ width: `${(currentIndex / (steps.length - 1)) * 100}%` }}
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${(currentIndex / (steps.length - 1)) * 100}%` }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
+          className="absolute top-5 left-4 h-0.75 bg-blue-600 rounded-full z-0"
         />
 
         {steps.map((step, idx) => {
@@ -37,24 +47,35 @@ export default function WorkflowTracker({ currentStep, onStepClick }) {
               onClick={() => onStepClick && onStepClick(step.id)}
               className="flex flex-col items-center relative z-10 focus:outline-none group cursor-pointer"
             >
-              <div 
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-2 ${
+              {/* Stepper Node Icon */}
+              <motion.div 
+                animate={{ 
+                  scale: isActive ? 1.08 : 1,
+                  boxShadow: isActive ? '0 0 12px rgba(37, 99, 235, 0.25)' : 'none'
+                }}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 border-2 ${
                   isActive 
-                    ? 'bg-primary border-primary text-white scale-110 shadow-md shadow-primary/20' 
+                    ? 'bg-blue-600 border-blue-600 text-white' 
                     : isCompleted
-                      ? 'bg-accent border-accent text-white'
-                      : 'bg-[var(--bg-card)] border-gray-300 dark:border-slate-600 text-[var(--text-muted)] group-hover:border-primary group-hover:text-primary'
+                      ? 'bg-emerald-600 border-emerald-600 text-white'
+                      : 'bg-[var(--bg-card)] border-slate-200 dark:border-slate-800 text-[var(--text-muted)] group-hover:border-blue-500 group-hover:text-blue-500'
                 }`}
               >
-                <Icon className="w-5 h-5" />
-              </div>
+                {isCompleted ? (
+                  <Check className="w-4.5 h-4.5 font-bold" />
+                ) : (
+                  <Icon className="w-4.5 h-4.5" />
+                )}
+              </motion.div>
+              
+              {/* Step Label */}
               <span 
-                className={`mt-2 text-xs font-semibold tracking-wide transition-colors duration-200 ${
+                className={`mt-2.5 text-[10px] font-bold tracking-wider uppercase font-display transition-colors duration-200 ${
                   isActive 
-                    ? 'text-primary' 
+                    ? 'text-blue-600' 
                     : isCompleted
-                      ? 'text-accent'
-                      : 'text-[var(--text-muted)] group-hover:text-primary'
+                      ? 'text-slate-500 dark:text-slate-400'
+                      : 'text-[var(--text-muted)] group-hover:text-blue-500'
                 }`}
               >
                 {step.label}
