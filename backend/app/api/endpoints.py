@@ -7,7 +7,7 @@ from pathlib import Path
 
 from backend.app.core.config import settings
 from backend.app.db.session import get_db
-from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult, RuleMapping
+from backend.app.models.models import Circular, Obligation, DiffSession, DiffResult, RuleMapping, User
 from backend.app.schemas.schemas import (
     CircularMetadataResponse,
     CircularResponse,
@@ -28,8 +28,22 @@ from backend.app.services.pdf_extractor import (
     SAMPLES_DIR
 )
 
+# Authentication and Authorization imports
+from backend.app.core.dependencies import get_current_user, RoleChecker
+from backend.app.api.auth import router as auth_router
+from backend.app.api.users import router as users_router
+
 router = APIRouter()
 logger = logging.getLogger("regpulse.api")
+
+# Register Auth and Users sub-routers
+router.include_router(auth_router)
+router.include_router(users_router)
+
+# Define guards
+manager_guard = RoleChecker(["Super Admin", "Compliance Manager"])
+analyst_guard = RoleChecker(["Super Admin", "Compliance Manager", "Compliance Analyst"])
+auditor_guard = RoleChecker(["Super Admin", "Compliance Manager", "Compliance Analyst", "Auditor"])
 
 @router.get("/health")
 def health_check():
@@ -39,11 +53,9 @@ def health_check():
     api_key = settings.GEMINI_API_KEY
     gemini_configured = False
     
-    # 1. Filter out known mock/placeholder keys
     if not api_key or api_key in ("mock_api_key", "your_gemini_api_key_here"):
         logger.debug("Gemini key is mock or empty. Using Mock Mode.")
     else:
-        # 2. Attempt client initialization
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
@@ -60,7 +72,7 @@ def health_check():
     }
 
 @router.get("/circulars", response_model=List[CircularMetadataResponse])
-def list_circulars(db: Session = Depends(get_db)):
+def list_circulars(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """List all uploaded/sample circulars from the database."""
     logger.info("Listing all circulars")
     try:
@@ -72,22 +84,23 @@ def list_circulars(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Database query error")
 
 @router.post("/circulars/upload")
-async def upload_circular(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_circular(
+    file: UploadFile = File(...), 
+    current_user: User = Depends(analyst_guard),
+    db: Session = Depends(get_db)
+):
     """Uploads a PDF, extracts and cleans its text, and saves it in the database.
     Uses SHA-256 hashing to check cache and deduplicate database records.
     """
     filename = file.filename
     logger.info("Upload started for file: %s", filename)
     
-    # Validate extension
     if not filename.lower().endswith('.pdf'):
         logger.error("Rejecting file %s: only PDF is allowed.", filename)
         raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
     
-    # Save file to a temporary location to compute hash and check size
     temp_path = UPLOADS_DIR / f"temp_{filename}"
     try:
-        # Enforce size limit (50 MB)
         file_size = 0
         with temp_path.open("wb") as f:
             while chunk := await file.read(65536):
@@ -97,16 +110,13 @@ async def upload_circular(file: UploadFile = File(...), db: Session = Depends(ge
                     raise HTTPException(status_code=413, detail="File size exceeds maximum limit of 50 MB.")
                 f.write(chunk)
         
-        # Compute SHA-256 hash
         file_hash = compute_sha256(temp_path)
         
-        # Check database for existing circular with same pdf_hash
         stmt = select(Circular).where(Circular.pdf_hash == file_hash)
         existing_circular = db.execute(stmt).scalar_one_or_none()
         
         if existing_circular:
             logger.info("Circular with hash %s already exists. Reusing database record.", file_hash)
-            # Remove temp file
             temp_path.unlink()
             logger.info("Upload completed (reused existing record) for: %s", filename)
             
@@ -117,20 +127,16 @@ async def upload_circular(file: UploadFile = File(...), db: Session = Depends(ge
                 "cached": True
             }
             
-        # Rename temp file to final destination
         final_pdf_path = UPLOADS_DIR / filename
         if final_pdf_path.exists():
             final_pdf_path.unlink()
         temp_path.rename(final_pdf_path)
         
-        # Extract and clean text (checking cache)
         cleaned_text, cached_hit = get_or_extract_text(final_pdf_path, file_hash)
         
-        # Extract title and version date
         title = extract_title(cleaned_text, filename)
         version_date = extract_version_date(cleaned_text)
         
-        # Save to database
         db_circular = Circular(
             title=title,
             version_date=version_date,
@@ -168,7 +174,11 @@ async def upload_circular(file: UploadFile = File(...), db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/circulars/{id}", response_model=CircularMetadataResponse)
-def get_circular_metadata(id: int, db: Session = Depends(get_db)):
+def get_circular_metadata(
+    id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Retrieve metadata for a specific circular by ID."""
     logger.info("Fetching metadata for circular ID: %d", id)
     stmt = select(Circular).where(Circular.id == id)
@@ -179,7 +189,11 @@ def get_circular_metadata(id: int, db: Session = Depends(get_db)):
     return circular
 
 @router.get("/circulars/{id}/text")
-def get_circular_text(id: int, db: Session = Depends(get_db)):
+def get_circular_text(
+    id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Retrieve clean extracted text for a specific circular by ID."""
     logger.info("Fetching text for circular ID: %d", id)
     stmt = select(Circular).where(Circular.id == id)
@@ -190,7 +204,10 @@ def get_circular_text(id: int, db: Session = Depends(get_db)):
     return {"id": circular.id, "text": circular.raw_text}
 
 @router.post("/circulars/process-samples")
-def process_samples(db: Session = Depends(get_db)):
+def process_samples(
+    current_user: User = Depends(analyst_guard),
+    db: Session = Depends(get_db)
+):
     """Scans sample_circulars directory and processes all PDFs found.
     Uses hash-based cache and deduplication, saving records to DB.
     """
@@ -201,9 +218,7 @@ def process_samples(db: Session = Depends(get_db)):
         logger.warning("Sample circulars directory does not exist: %s", SAMPLES_DIR)
         return {"processed": 0, "details": []}
         
-    # Scan for PDF files
     pdf_files = list(SAMPLES_DIR.glob("*.pdf")) + list(SAMPLES_DIR.glob("*.PDF"))
-    # Eliminate duplicate paths in case case-insensitive match on Windows
     pdf_files = list(set(pdf_files))
     
     logger.info("Found %d sample PDF files to process.", len(pdf_files))
@@ -211,10 +226,8 @@ def process_samples(db: Session = Depends(get_db)):
     for pdf_path in pdf_files:
         filename = pdf_path.name
         try:
-            # Compute SHA-256 hash
             file_hash = compute_sha256(pdf_path)
             
-            # Check database for existing circular with same pdf_hash
             stmt = select(Circular).where(Circular.pdf_hash == file_hash)
             existing_circular = db.execute(stmt).scalar_one_or_none()
             
@@ -229,14 +242,11 @@ def process_samples(db: Session = Depends(get_db)):
                 })
                 continue
                 
-            # Extract and clean text (checking cache)
             cleaned_text, cached_hit = get_or_extract_text(pdf_path, file_hash)
             
-            # Extract title and version date
             title = extract_title(cleaned_text, filename)
             version_date = extract_version_date(cleaned_text)
             
-            # Save to database
             db_circular = Circular(
                 title=title,
                 version_date=version_date,
@@ -269,7 +279,11 @@ def process_samples(db: Session = Depends(get_db)):
     return {"processed": len(pdf_files), "details": results}
 
 @router.post("/circulars/{id}/extract", response_model=List[ObligationResponse])
-def extract_circular_obligations(id: int, db: Session = Depends(get_db)):
+def extract_circular_obligations(
+    id: int, 
+    current_user: User = Depends(analyst_guard),
+    db: Session = Depends(get_db)
+):
     """Extract compliance obligations from a circular (utilizes Gemini/Mock Mode)."""
     logger.info("Extraction requested for circular ID: %d", id)
     try:
@@ -289,11 +303,14 @@ def extract_circular_obligations(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Internal extraction error: {str(e)}")
 
 @router.get("/circulars/{id}/obligations", response_model=List[ObligationResponse])
-def get_circular_obligations(id: int, db: Session = Depends(get_db)):
+def get_circular_obligations(
+    id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Retrieve stored compliance obligations for a specific circular by ID (never calls Gemini)."""
     logger.info("Fetching obligations for circular ID: %d", id)
     try:
-        # Check if circular exists first to return 404 if missing
         stmt_circ = select(Circular).where(Circular.id == id)
         circular = db.execute(stmt_circ).scalar_one_or_none()
         if not circular:
@@ -310,7 +327,11 @@ def get_circular_obligations(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Database query error")
 
 @router.post("/diff", response_model=DiffSummaryResponse)
-def compute_diff(request: DiffRequest, db: Session = Depends(get_db)):
+def compute_diff(
+    request: DiffRequest, 
+    current_user: User = Depends(analyst_guard),
+    db: Session = Depends(get_db)
+):
     """Compare two RBI circulars using their obligations."""
     logger.info("Diff API requested: old_circular_id=%d, new_circular_id=%d", request.old_circular_id, request.new_circular_id)
     try:
@@ -324,11 +345,14 @@ def compute_diff(request: DiffRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Diff engine failed: {str(e)}")
 
 @router.get("/diff/{diff_id}", response_model=DiffDetailResponse)
-def get_diff_detail(diff_id: int, db: Session = Depends(get_db)):
+def get_diff_detail(
+    diff_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Retrieve diff results grouped by category."""
     logger.info("Diff detail requested for session ID: %d", diff_id)
     try:
-        # Check if DiffSession exists
         stmt_session = select(DiffSession).where(DiffSession.id == diff_id)
         session_record = db.execute(stmt_session).scalar_one_or_none()
         if not session_record:
@@ -338,8 +362,6 @@ def get_diff_detail(diff_id: int, db: Session = Depends(get_db)):
         stmt_results = select(DiffResult).where(DiffResult.diff_session_id == diff_id)
         results = db.execute(stmt_results).scalars().all()
         
-        # Group by category (NEW, CHANGED, UNCHANGED)
-        # Note: categories are stored as lowercase "new", "changed", "unchanged" in DB
         grouped = {
             "NEW": [r for r in results if r.category == "new"],
             "CHANGED": [r for r in results if r.category == "changed"],
@@ -353,7 +375,11 @@ def get_diff_detail(diff_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
 
 @router.post("/diff/{diff_id}/map", response_model=MappingSummaryResponse)
-def map_diff_rules(diff_id: int, db: Session = Depends(get_db)):
+def map_diff_rules(
+    diff_id: int, 
+    current_user: User = Depends(analyst_guard),
+    db: Session = Depends(get_db)
+):
     """Run rule mapping engine for new and changed obligations in a diff session."""
     logger.info("Rule mapping POST requested for session ID: %d", diff_id)
     try:
@@ -367,19 +393,21 @@ def map_diff_rules(diff_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Rule mapping failed: {str(e)}")
 
 @router.get("/diff/{diff_id}/mappings", response_model=List[MappingDetailResponse])
-def get_diff_mappings(diff_id: int, db: Session = Depends(get_db)):
+def get_diff_mappings(
+    diff_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Retrieve rule mappings for new and changed obligations in a diff session."""
     logger.info("Rule mappings GET requested for session ID: %d", diff_id)
     try:
         import json
-        # Check if DiffSession exists
         stmt_session = select(DiffSession).where(DiffSession.id == diff_id)
         session_record = db.execute(stmt_session).scalar_one_or_none()
         if not session_record:
             logger.error("DiffSession with ID %d not found.", diff_id)
             raise HTTPException(status_code=404, detail="DiffSession not found")
             
-        # Find all NEW and CHANGED diff results
         stmt_results = select(DiffResult).where(
             DiffResult.diff_session_id == diff_id,
             DiffResult.category.in_(["new", "changed"])
@@ -391,7 +419,6 @@ def get_diff_mappings(diff_id: int, db: Session = Depends(get_db)):
             if not r.new_obligation:
                 continue
                 
-            # Fetch stored mapping for this new_obligation
             stmt_mapping = select(RuleMapping).where(RuleMapping.obligation_id == r.new_obligation_id)
             mapping = db.execute(stmt_mapping).scalar_one_or_none()
             
@@ -427,14 +454,17 @@ def get_diff_mappings(diff_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
 
 @router.get("/diff/{diff_id}/export/pdf")
-def export_diff_pdf(diff_id: int, db: Session = Depends(get_db)):
+def export_diff_pdf(
+    diff_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Generates and exports a professional compliance impact PDF advisory report."""
     logger.info("PDF export requested for diff ID: %d", diff_id)
     try:
         from backend.app.services.pdf_generator import generate_compliance_pdf
         pdf_content = generate_compliance_pdf(db, diff_id)
         
-        # Set headers for downloading PDF
         headers = {
             "Content-Disposition": f"attachment; filename=RegPulse_Compliance_Report_{diff_id}.pdf"
         }
@@ -447,14 +477,17 @@ def export_diff_pdf(diff_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 @router.get("/diff/{diff_id}/export/csv")
-def export_diff_csv(diff_id: int, db: Session = Depends(get_db)):
+def export_diff_csv(
+    diff_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Generates and exports a compliance impact CSV table."""
     logger.info("CSV export requested for diff ID: %d", diff_id)
     try:
         from backend.app.services.csv_generator import generate_compliance_csv
         csv_content = generate_compliance_csv(db, diff_id)
         
-        # Set headers for downloading CSV
         headers = {
             "Content-Disposition": f"attachment; filename=RegPulse_Rule_Impact_Table_{diff_id}.csv"
         }
