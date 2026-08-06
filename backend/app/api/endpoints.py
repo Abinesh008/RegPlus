@@ -281,7 +281,7 @@ def process_samples(
 @router.post("/circulars/{id}/extract", response_model=List[ObligationResponse])
 def extract_circular_obligations(
     id: int, 
-    current_user: User = Depends(manager_guard),
+    current_user: User = Depends(analyst_guard),
     db: Session = Depends(get_db)
 ):
     """Extract compliance obligations from a circular (utilizes Gemini/Mock Mode)."""
