@@ -53,12 +53,81 @@ export default function ComplianceReport({
   const [signatureChecker, setSignatureChecker] = useState(false);
   const [signatureApprover, setSignatureApprover] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+
   const oldCircular = circulars.find(c => c.id === Number(oldCircularId));
   const newCircular = circulars.find(c => c.id === Number(newCircularId));
   const hasData = mappings.length > 0 && newCircular;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const getFilenameFromHeaders = (headers, fallback) => {
+    const contentDisposition = headers?.['content-disposition'] || headers?.['Content-Disposition'];
+    if (!contentDisposition) return fallback;
+    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+    const matches = filenameRegex.exec(contentDisposition);
+    if (matches != null && matches[1]) {
+      return matches[1].replace(/['"]/g, '');
+    }
+    return fallback;
+  };
+
+  const handleExportPDF = async () => {
+    if (!activeDiffId) return;
+    setExportingPdf(true);
+    setErrorMessage('');
+    try {
+      const res = await api.exportPDF(activeDiffId);
+      if (res.success && res.data) {
+        const filename = getFilenameFromHeaders(res.headers, `Compliance_Report_${activeDiffId}.pdf`);
+        const blob = new Blob([res.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        setErrorMessage(res.error || 'Failed to export PDF report.');
+      }
+    } catch (err) {
+      setErrorMessage('An unexpected error occurred while exporting PDF.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (!activeDiffId) return;
+    setExportingCsv(true);
+    setErrorMessage('');
+    try {
+      const res = await api.exportCSV(activeDiffId);
+      if (res.success && res.data) {
+        const filename = getFilenameFromHeaders(res.headers, `Compliance_Report_${activeDiffId}.csv`);
+        const blob = new Blob([res.data], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        setErrorMessage(res.error || 'Failed to export CSV data.');
+      }
+    } catch (err) {
+      setErrorMessage('An unexpected error occurred while exporting CSV.');
+    } finally {
+      setExportingCsv(false);
+    }
   };
 
   // Calculations
@@ -333,25 +402,31 @@ export default function ComplianceReport({
                   <Printer className="w-3.5 h-3.5" /> Print layout
                 </button>
                 
-                <a
-                  href={`http://localhost:8000/diff/${activeDiffId}/export/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center justify-center gap-1.5"
-                  style={{ textDecoration: 'none', display: 'flex' }}
+                <button
+                  onClick={handleExportPDF}
+                  disabled={exportingPdf}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export PDF Report
-                </a>
+                  {exportingPdf ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  Export PDF Report
+                </button>
 
-                <a
-                  href={`http://localhost:8000/diff/${activeDiffId}/export/csv`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center justify-center gap-1.5"
-                  style={{ textDecoration: 'none', display: 'flex' }}
+                <button
+                  onClick={handleExportCSV}
+                  disabled={exportingCsv}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export CSV Data
-                </a>
+                  {exportingCsv ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  Export CSV Data
+                </button>
               </div>
             </div>
 

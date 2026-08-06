@@ -25,7 +25,7 @@ export const setAccessToken = (token) => {
 const handleRequest = async (promise) => {
   try {
     const response = await promise;
-    return { data: response.data, error: null, suggestion: null, success: true };
+    return { data: response.data, headers: response.headers, error: null, suggestion: null, success: true };
   } catch (error) {
     console.error("API Client Error:", error);
     const responseData = error.response?.data;
@@ -98,7 +98,9 @@ export const api = {
   listUsers: (search, role) => handleRequest(client.get('/users', { params: { search, role } })),
   createUser: (userData) => handleRequest(client.post('/users', userData)),
   updateUser: (id, userData) => handleRequest(client.put(`/users/${id}`, userData)),
-  deleteUser: (id) => handleRequest(client.delete(`/users/${id}`))
+  deleteUser: (id) => handleRequest(client.delete(`/users/${id}`)),
+  exportPDF: (diffId) => handleRequest(client.get(`/diff/${diffId}/export/pdf`, { responseType: 'blob' })),
+  exportCSV: (diffId) => handleRequest(client.get(`/diff/${diffId}/export/csv`, { responseType: 'blob' }))
 };
 
 export default api;
