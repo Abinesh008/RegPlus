@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function CircularLibrary({
   circulars = [],
@@ -44,6 +45,8 @@ export default function CircularLibrary({
   onExtractSuccess,
   onNavigate
 }) {
+  const { user } = useAuth();
+  const isWritable = user?.role !== 'Auditor';
   const [uploading, setUploading] = useState(false);
   const [processingSamples, setProcessingSamples] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -330,9 +333,9 @@ export default function CircularLibrary({
             className={`border-2 border-dashed rounded-xl p-8 text-center flex flex-col items-center justify-center transition-colors cursor-pointer ${
               dragActive 
                 ? 'border-blue-500 bg-blue-500/5' 
-                : 'border-[var(--border-color)] hover:border-blue-500 bg-[var(--bg-app)]/50'
+                : 'border-[var(--border-color)] ' + (isWritable ? 'hover:border-blue-500 cursor-pointer' : 'cursor-not-allowed') + ' bg-[var(--bg-app)]/50'
             }`}
-            onClick={() => document.getElementById('file-upload-input').click()}
+            onClick={() => isWritable && document.getElementById('file-upload-input').click()}
           >
             <input
               id="file-upload-input"
@@ -343,7 +346,7 @@ export default function CircularLibrary({
             />
             <FileText className={`w-10 h-10 mb-3.5 ${dragActive ? 'text-blue-500 animate-bounce' : 'text-slate-400'}`} />
             <p className="text-xs font-bold text-[var(--text-main)] mb-1">
-              Drag & Drop PDF here, or <span className="text-blue-600 underline">browse your local folder</span>
+              {isWritable ? <>Drag & Drop PDF here, or <span className="text-blue-600 underline">browse your local folder</span></> : <>Upload is restricted for Auditor accounts.</>}
             </p>
             <p className="text-[10px] text-[var(--text-muted)]">
               PDF formats only (Maximum limit 50 MB)
@@ -390,10 +393,10 @@ export default function CircularLibrary({
           </div>
           <button
             onClick={handleLoadSamples}
-            disabled={processingSamples || uploading}
+            disabled={processingSamples || uploading || !isWritable}
             className="w-full text-center py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-xs"
           >
-            {processingSamples ? 'Indexing Sample Files...' : 'Index Sample Circulars'}
+            {processingSamples ? 'Indexing Sample Files...' : isWritable ? 'Index Sample Circulars' : 'Index Samples (Restricted)'}
           </button>
         </div>
 
@@ -512,14 +515,16 @@ export default function CircularLibrary({
                       </td>
                       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1.5 justify-end">
-                          <button
-                            onClick={() => handleExtractObligations(circ.id)}
-                            disabled={extractingId === circ.id}
-                            className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer disabled:opacity-50 shadow-xs"
-                            title="Trigger obligations analysis"
-                          >
-                            <Cpu className="w-3.5 h-3.5" />
-                          </button>
+                          {isWritable && (
+                            <button
+                              onClick={() => handleExtractObligations(circ.id)}
+                              disabled={extractingId === circ.id}
+                              className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer disabled:opacity-50 shadow-xs"
+                              title="Trigger obligations analysis"
+                            >
+                              <Cpu className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           
                           <button
                             disabled
@@ -674,13 +679,19 @@ export default function CircularLibrary({
                         Quick Audit Actions
                       </h4>
                       <div className="space-y-1.5">
-                        <button
-                          onClick={() => handleExtractObligations(activePreviewCirc.id)}
-                          disabled={extractingId === activePreviewCirc.id}
-                          className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-[10px] font-bold cursor-pointer transition-colors shadow-xs"
-                        >
-                          {extractingId === activePreviewCirc.id ? 'Extracting Obligations...' : 'Extract Obligations'}
-                        </button>
+                        {isWritable ? (
+                          <button
+                            onClick={() => handleExtractObligations(activePreviewCirc.id)}
+                            disabled={extractingId === activePreviewCirc.id}
+                            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-[10px] font-bold cursor-pointer transition-colors shadow-xs"
+                          >
+                            {extractingId === activePreviewCirc.id ? 'Extracting Obligations...' : 'Extract Obligations'}
+                          </button>
+                        ) : (
+                          <div className="w-full py-1.5 text-center bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 rounded-md border border-[var(--border-color)]">
+                            Extraction Restricted
+                          </div>
+                        )}
                         
                         <button
                           onClick={() => onNavigate('comparison')}

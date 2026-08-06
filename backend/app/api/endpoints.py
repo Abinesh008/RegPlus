@@ -86,7 +86,7 @@ def list_circulars(current_user: User = Depends(get_current_user), db: Session =
 @router.post("/circulars/upload")
 async def upload_circular(
     file: UploadFile = File(...), 
-    current_user: User = Depends(manager_guard),
+    current_user: User = Depends(analyst_guard),
     db: Session = Depends(get_db)
 ):
     """Uploads a PDF, extracts and cleans its text, and saves it in the database.
@@ -205,7 +205,7 @@ def get_circular_text(
 
 @router.post("/circulars/process-samples")
 def process_samples(
-    current_user: User = Depends(manager_guard),
+    current_user: User = Depends(analyst_guard),
     db: Session = Depends(get_db)
 ):
     """Scans sample_circulars directory and processes all PDFs found.
@@ -329,7 +329,7 @@ def get_circular_obligations(
 @router.post("/diff", response_model=DiffSummaryResponse)
 def compute_diff(
     request: DiffRequest, 
-    current_user: User = Depends(manager_guard),
+    current_user: User = Depends(analyst_guard),
     db: Session = Depends(get_db)
 ):
     """Compare two RBI circulars using their obligations."""
@@ -377,7 +377,7 @@ def get_diff_detail(
 @router.post("/diff/{diff_id}/map", response_model=MappingSummaryResponse)
 def map_diff_rules(
     diff_id: int, 
-    current_user: User = Depends(manager_guard),
+    current_user: User = Depends(analyst_guard),
     db: Session = Depends(get_db)
 ):
     """Run rule mapping engine for new and changed obligations in a diff session."""
