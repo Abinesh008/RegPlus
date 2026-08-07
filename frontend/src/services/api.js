@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://regplus-1-o.onrender.com';
 
 const client = axios.create({
   baseURL: API_BASE,
