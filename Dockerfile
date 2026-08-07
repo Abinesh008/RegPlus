@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 # Copy backend requirements and install dependencies
 COPY backend/requirements.txt /workspace/requirements.txt
-RUN pip install --no-cache-dir -r /workspace/requirements.txt
+RUN cat /workspace/requirements.txt && pip install --no-cache-dir -r /workspace/requirements.txt
 
 # Copy backend source code
 COPY backend/ /workspace/backend
