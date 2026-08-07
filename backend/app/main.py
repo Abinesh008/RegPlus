@@ -197,7 +197,11 @@ app.add_middleware(
 async def options_preflight_middleware(request: Request, call_next):
     if request.method == "OPTIONS":
         origin = request.headers.get("Origin")
-        if origin and ("localhost" in origin or "127.0.0.1" in origin):
+        if origin and (
+    "localhost" in origin
+    or "127.0.0.1" in origin
+    or "vercel.app" in origin
+):
             response = Response("OK", status_code=200)
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
