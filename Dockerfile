@@ -3,14 +3,17 @@ FROM python:3.11-slim
 WORKDIR /workspace
 
 # Copy backend requirements and install dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt /workspace/requirements.txt
+RUN cat /workspace/requirements.txt && pip install --no-cache-dir -r /workspace/requirements.txt
 
-# Copy all backend code into the workspace
+# Copy backend source code
 COPY backend/ /workspace/backend
 
+# Python module path
 ENV PYTHONPATH=/workspace
+
+# Expose FastAPI port
 EXPOSE 8000
 
-# Run FastAPI app via uvicorn
+# Start FastAPI
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
