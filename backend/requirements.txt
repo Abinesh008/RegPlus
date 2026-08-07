@@ -10,3 +10,4 @@ google-genai
 reportlab>=5.0.0
 passlib[bcrypt]
 bcrypt
+PyJWT
