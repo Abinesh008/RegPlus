@@ -181,6 +181,7 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://reg-plus-opgrf90m5-abinesh008s-projects.vercel.app",
 ]
 
 app.add_middleware(
