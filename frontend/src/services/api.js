@@ -5,7 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://regplus-1-o.onren
 const client = axios.create({
   baseURL: API_BASE,
   timeout: 60000, // 60 seconds
-  withCredentials: true, // Crucial for receiving and sending HttpOnly cookies
+  withCredentials: false, // Crucial for receiving and sending HttpOnly cookies
   headers: {
     'Content-Type': 'application/json',
   },
